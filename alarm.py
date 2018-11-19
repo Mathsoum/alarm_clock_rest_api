@@ -16,6 +16,8 @@ alarm_parser.add_argument('days')
 alarm_parser.add_argument('active')
 
 
+# TODO NTUI. We need to check the time strings!
+
 class AlarmListApi(Resource):
     def get(self):
         return {'alarm_list': [alarm.json_dict() for alarm in alarm_list]}
@@ -53,8 +55,17 @@ class AlarmApi(Resource):
         return '', 204
 
     def put(self, alarm_id):
-        # TODO Change 'time', 'days' or 'active' regarding what parameters were given
-        pass
+        abort_if_alarm_doesnt_exists(alarm_id)
+        args = alarm_parser.parse_args()
+        alarm = get_alarm_from_list(alarm_id)
+        if "time" in args:
+            alarm.time = args["time"]
+        if "days" in args:
+            alarm.days = json.loads(args["days"])
+        if "active" in args:
+            alarm.active = args["active"] != "false"
+
+        return alarm.json_dict(), 201
 
 
 class Alarm:
@@ -69,7 +80,7 @@ class Alarm:
         else:
             self.time = _time
 
-        self.days = {
+        self.__days = {
             "Monday":    False,
             "Tuesday":   False,
             "Wednesday": False,
@@ -80,10 +91,7 @@ class Alarm:
         }
 
         if _days is not None:
-            json_days = json.loads(_days)
-            for key in json_days:
-                if key in self.days:
-                    self.days[key] = json_days[key]
+            self.days = json.loads(_days)
 
         if _active is None:
             self.__active = False
@@ -104,6 +112,16 @@ class Alarm:
         elif prev and not self.__active:  # Falling edge detection to avoid multiple cron interactions
             self.unregister_alarm()
 
+    @property
+    def days(self):
+        return self.__days
+
+    @days.setter
+    def days(self, value):
+        for key in value:
+            if key in self.__days:
+                self.__days[key] = value[key]
+
     def register_alarm(self):
         # TODO Register alarm as a cron script
         pass
@@ -116,6 +134,6 @@ class Alarm:
         return {
             'id':     self.id,
             'time':   self.time,
-            'days':   self.days,
+            'days':   self.__days,
             'active': self.__active
         }
